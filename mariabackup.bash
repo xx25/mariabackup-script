@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 #v1.0 written by Harry Pask
 #Mariabackup tool for full and incremental backups for non-encrypted tables
 #Built in backup retention, email on backup failure and easy to change Mariabackup options
@@ -40,7 +41,7 @@ full_backup_file=$current_date_folder/full.backup
 # Create the current date folder
 incremental_folder=$current_date_folder/incr/$current_datetime
 fullbackuplocation=$current_date_folder/fullbackup
-mkdir -p $current_date_folder
+mkdir -p "$current_date_folder"
 
 #table struture variables
 dumpstructurefolder=$current_date_folder/tablestructure/
@@ -76,47 +77,47 @@ debug_log "backup_dir=$backup_dir"
 debug_log "current_date_folder=$current_date_folder"
 debug_log "extra_lsndir=$extra_lsndir"
 debug_log "fullbackuplocation=$fullbackuplocation"
-debug_log "full_backup_file=$full_backup_file (exists: $([ -f $full_backup_file ] && echo yes || echo no))"
+debug_log "full_backup_file=$full_backup_file (exists: $([ -f "$full_backup_file" ] && echo yes || echo no))"
 debug_log "incremental_folder=$incremental_folder"
 debug_log "ulimit nofile=$(ulimit -n)"
 debug_log "full backup options: ${backup_options_full[*]}"
 debug_log "incremental options: ${backup_options_inc[*]}"
 
 #------backup process-------
-cd $current_date_folder
+cd "$current_date_folder"
 # Check if full backup file exists
-if [ -f $full_backup_file ]; then
+if [ -f "$full_backup_file" ]; then
 	# Perform incremental backup if $full_backup_file exists
 	debug_log "Running INCREMENTAL backup to $incremental_folder"
-	mkdir -p $incremental_folder
-	mariabackup "${backup_options_inc[@]}" 2>> $current_date_folder/backup.log | pigz > $incremental_folder/incremental.backup.gz
+	mkdir -p "$incremental_folder"
+	mariabackup "${backup_options_inc[@]}" 2>> "$current_date_folder/backup.log" | pigz > "$incremental_folder/incremental.backup.gz"
 	debug_log "Incremental backup exit code: ${PIPESTATUS[0]}, pigz exit code: ${PIPESTATUS[1]}"
 else
 	# Perform full backup
 	debug_log "Running FULL backup to $fullbackuplocation"
-	mkdir -p $fullbackuplocation
-	mariabackup "${backup_options_full[@]}" 2>> $current_date_folder/backup.log | pigz > $fullbackuplocation/full_backup.gz
+	mkdir -p "$fullbackuplocation"
+	mariabackup "${backup_options_full[@]}" 2>> "$current_date_folder/backup.log" | pigz > "$fullbackuplocation/full_backup.gz"
 	debug_log "Full backup exit code: ${PIPESTATUS[0]}, pigz exit code: ${PIPESTATUS[1]}"
 fi
 
 #dump table structure
 if [[ $dumpstructure == "y" ]];then
-	mkdir -p $dumpstructurefolder
+	mkdir -p "$dumpstructurefolder"
 
 	mapfile -t databasenames < <(mariadb -u "$user" -p"$password" -BNe "SHOW DATABASES" 2>/dev/null | grep -Ev '^(information_schema|performance_schema|sys)$')
 	debug_log "Databases to dump: ${databasenames[*]}"
 
 	for dbname in "${databasenames[@]}"
 	do
-		mkdir -p $dumpstructurefolder/$dbname/
-		mariadb-dump -u $user -p$password -R --no-data $dbname > $dumpstructurefolder/$dbname/$currenttimedatastructure
+		mkdir -p "$dumpstructurefolder/$dbname/"
+		mariadb-dump -u "$user" -p"$password" -R --no-data "$dbname" > "$dumpstructurefolder/$dbname/$currenttimedatastructure"
 	done
 fi
 
 #-----Check backup was successful-------
 
 #check backup log
-checkstatus=$(tail -n 2 /$current_date_folder/backup.log| grep -c "completed OK")
+checkstatus=$(tail -n 2 "$current_date_folder/backup.log" | grep -c "completed OK")
 
 #if completed OK! is at the end of the backup log file then add status to backup_status.log
 #if not then send backup.log to email address and delete failed incremental backup folder so prepare script doesn't break
@@ -125,8 +126,8 @@ checkstatus=$(tail -n 2 /$current_date_folder/backup.log| grep -c "completed OK"
 debug_log "checkstatus=$checkstatus (1=OK)"
 
 if [[ $checkstatus -eq 1 ]]; then
-    echo "$(date +'%Y-%m-%d %H:%M:%S') mariabackup completed okay" >> $current_date_folder/backup_status.log
-	touch $full_backup_file
+    echo "$(date +'%Y-%m-%d %H:%M:%S') mariabackup completed okay" >> "$current_date_folder/backup_status.log"
+	touch "$full_backup_file"
 	#retention cleanup based on folder name (date), not filesystem mtime (unreliable on NFS)
 	cutoff_date=$(date -d "-${backupdays} days" +"%Y-%m-%d")
 	for dir in "$backup_dir"/20*; do
@@ -139,13 +140,14 @@ if [[ $checkstatus -eq 1 ]]; then
 	done
 else
     log_content=$(tail -n 200 "$current_date_folder/backup.log") 
-    echo "$log_content" | mailx -r $fromemail -s "MariaBackup task for $HOSTNAME failed" $emails
+    read -r -a recipients <<< "$emails"
+    echo "$log_content" | mailx -r "$fromemail" -s "MariaBackup task for $HOSTNAME failed" "${recipients[@]}"
 		#checks if full backup completed, if it has then failed incremental backup is removed
-		if [[ -f $full_backup_file ]]; then
-			rm -rf $incremental_folder
-			echo "$(date +'%Y-%m-%d %H:%M:%S') mariabackup failed - file $incremental_folder deleted" >> $current_date_folder/backup_status.log
-		else 
-			echo "$(date +'%Y-%m-%d %H:%M:%S') Full backup failed, please resolve issue and rerun backup" >> $current_date_folder/backup_status.log
+		if [[ -f "$full_backup_file" ]]; then
+			rm -rf "$incremental_folder"
+			echo "$(date +'%Y-%m-%d %H:%M:%S') mariabackup failed - file $incremental_folder deleted" >> "$current_date_folder/backup_status.log"
+		else
+			echo "$(date +'%Y-%m-%d %H:%M:%S') Full backup failed, please resolve issue and rerun backup" >> "$current_date_folder/backup_status.log"
 		fi
 fi	
 

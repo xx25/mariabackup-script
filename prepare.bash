@@ -1,7 +1,8 @@
 #!/bin/bash
+set -o pipefail
 #Only to be run if an incremental backup has been taken, if no incremental then prepare backup manually
-#To run do 
-#bash prepare.bash /path/to/backup/directory 
+#To run do
+#bash prepare.bash /path/to/backup/directory
 #include --export for single table restores ($2 variable)
 #script will then look for fullbackup folder and loop through the incremental backups in order
 #do not run if no incremental backups have been taken, run prepare manually
@@ -10,14 +11,18 @@
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/backup.conf"
 
+# Validate input
+if [[ -z "$1" ]] || [[ ! -d "$1" ]]; then
+    echo "Usage: bash prepare.bash /path/to/backup/directory [--export]"
+    exit 1
+fi
+
 # Set variables for the full backup folder and the incremental backup folder
 
 orig_backupdir="$1"
 backupdir="$1"
 exportoption="$2"
 FULL_BACKUP_DIR=$backupdir/fullbackup/
-restartfulldir=$FULL_BACKUP_DIR/*
-INCREMENTAL_BACKUP_DIR=$backupdir/incr/*
 incrementaldir=$backupdir/incr/
 preparelog=$backupdir/prepare.log
 
@@ -59,8 +64,6 @@ if [[ -n "$work_dir" ]]; then
     # Redirect all paths to local working directory
     backupdir="$local_backupdir"
     FULL_BACKUP_DIR="$local_backupdir/fullbackup/"
-    restartfulldir="$FULL_BACKUP_DIR*"
-    INCREMENTAL_BACKUP_DIR="$local_backupdir/incr/*"
     incrementaldir="$local_backupdir/incr/"
     preparelog="$local_backupdir/prepare.log"
     use_local=1
@@ -70,61 +73,69 @@ fi
 
 
 full_backup_file=$backupdir/full_backup.gz
-echo $full_backup_file 
-if [ -f $full_backup_file ]; then
+echo "$full_backup_file"
+if [ -f "$full_backup_file" ]; then
     echo "$(date +'%Y-%m-%d %H:%M:%S') Prepare script has been ran before. resetting directory for next prepare run"
     echo "$(date +'%Y-%m-%d %H:%M:%S') Emptying the $FULL_BACKUP_DIR directory"
-    rm -rf $restartfulldir
+    rm -rf "$FULL_BACKUP_DIR"/*
     echo "$(date +'%Y-%m-%d %H:%M:%S') Moving full backup zip file back to $FULL_BACKUP_DIR"
-    mv $backupdir/full_backup.gz $FULL_BACKUP_DIR
+    mv "$backupdir/full_backup.gz" "$FULL_BACKUP_DIR"
     echo "$(date +'%Y-%m-%d %H:%M:%S') Archiving prepare file"
     archivelog=$backupdir/old-prepare-$(date +'%H:%M:%S').log
-    mv $preparelog $archivelog
-    echo "$(date +'%Y-%m-%d %H:%M:%S') Directory reset, starting prepare process as normal"   
-    
+    mv "$preparelog" "$archivelog"
+    echo "$(date +'%Y-%m-%d %H:%M:%S') Directory reset, starting prepare process as normal"
+
 else
 
     echo "$(date +'%Y-%m-%d %H:%M:%S') First time running prepare. running process as normal"
 fi
 
 # Change directory, unzip file and prepare fullbackup
-cd $FULL_BACKUP_DIR
-unpigz -c $FULL_BACKUP_DIR/* | mbstream -x
-mariabackup --prepare --target-dir=$FULL_BACKUP_DIR 2>> $preparelog
-mv $FULL_BACKUP_DIR/full_backup.gz ..
+cd "$FULL_BACKUP_DIR"
+unpigz -c "$FULL_BACKUP_DIR"/* | mbstream -x
+if [[ ${PIPESTATUS[0]} -ne 0 || ${PIPESTATUS[1]} -ne 0 ]]; then
+    echo "$(date +'%Y-%m-%d %H:%M:%S') ERROR: decompression/extraction failed for full backup" >> "$preparelog"
+    exit 1
+fi
+mariabackup --prepare --target-dir="$FULL_BACKUP_DIR" 2>> "$preparelog"
+mv "$FULL_BACKUP_DIR/full_backup.gz" ..
 
 # Loop through incremental backup folders, unzip and apply them to the full backup
 
-for DIR in $INCREMENTAL_BACKUP_DIR
+for DIR in "$incrementaldir"/*
 do
-    checkstatus=$(tail -n 2 $preparelog | grep -c "completed OK")
-    
+    checkstatus=$(tail -n 2 "$preparelog" | grep -c "completed OK")
+
     if [[ $checkstatus -eq 1 ]]; then
-        cd $DIR
-        gunzip -c $DIR/* | mbstream -x
+        cd "$DIR"
+        unpigz -c "$DIR"/* | mbstream -x
+        if [[ ${PIPESTATUS[0]} -ne 0 || ${PIPESTATUS[1]} -ne 0 ]]; then
+            echo "$(date +'%Y-%m-%d %H:%M:%S') ERROR: decompression/extraction failed for $DIR" >> "$preparelog"
+            exit 1
+        fi
         echo "$(date +'%Y-%m-%d %H:%M:%S') Applying $DIR incremental updates to fullbackup"
-        mariabackup --prepare --target-dir=$FULL_BACKUP_DIR --incremental-dir=$DIR 2>> $preparelog
-    
+        mariabackup --prepare --target-dir="$FULL_BACKUP_DIR" --incremental-dir="$DIR" 2>> "$preparelog"
+
     else
         echo "$(date +'%Y-%m-%d %H:%M:%S') Last incremental failed to run, please check $preparelog for more details"
-        echo "$(date +'%Y-%m-%d %H:%M:%S') Check incremental folder for compressed file. Backup might be corrpted, prepare to last good incremental" >> $preparelog
+        echo "$(date +'%Y-%m-%d %H:%M:%S') Check incremental folder for compressed file. Backup might be corrpted, prepare to last good incremental" >> "$preparelog"
     fi
 done
 
 
 
 #delete incrmental uncompressed files after they are appiled to fullbackup to save space
-for DIR in $INCREMENTAL_BACKUP_DIR
+for DIR in "$incrementaldir"/*
 do
-    cd $DIR
-    find $DIR/* ! -name 'incremental.backup.gz' | xargs rm -rf
-    echo "$(date +'%Y-%m-%d %H:%M:%S') Deleted uncompressed files for incremental $DIR" >> $preparelog
+    cd "$DIR"
+    find "$DIR"/* ! -name 'incremental.backup.gz' | xargs rm -rf
+    echo "$(date +'%Y-%m-%d %H:%M:%S') Deleted uncompressed files for incremental $DIR" >> "$preparelog"
     echo "$(date +'%Y-%m-%d %H:%M:%S') Deleting uncompressed $DIR leaveing zipped file alone"
 done
 
-lastcheckstatus=$(grep -c "completed OK" $preparelog)
+lastcheckstatus=$(grep -c "completed OK" "$preparelog")
 
-incbackups=$(find $incrementaldir -mindepth 1 -maxdepth 1 -type d | wc -l)
+incbackups=$(find "$incrementaldir" -mindepth 1 -maxdepth 1 -type d | wc -l)
 includefull=$(($incbackups + 1))
 
 #if number of prepared backups = number of backups process was succesfully
@@ -142,9 +153,9 @@ else
         echo "$(date +'%Y-%m-%d %H:%M:%S') Local working directory preserved for inspection: $backupdir"
     fi
 fi
- 
 
-if [[ $2 == "--export" ]]; then
+
+if [[ "$2" == "--export" ]]; then
     echo "$(date +'%Y-%m-%d %H:%M:%S') Export option select, preparing the full backup with .cfg files for tablespace import"
-    mariabackup --prepare --export --target-dir=$FULL_BACKUP_DIR 2>> $preparelog
+    mariabackup --prepare --export --target-dir="$FULL_BACKUP_DIR" 2>> "$preparelog"
 fi
