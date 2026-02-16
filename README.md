@@ -52,7 +52,7 @@ When `dumpstructure='y'`, the script automatically discovers all databases (excl
 
 ### Mariabackup options ###
 
-The script defines two option arrays in `mariabackup.bash` — one for full and one for incremental backups. They automatically use `user` and `password` from `backup.conf`. To add extra mariabackup flags (e.g. `--parallel`, `--compress`), edit the arrays directly in the script:
+The script defines two option arrays in `mariabackup.bash` — one for full and one for incremental backups. They automatically use `user` and `password` from `backup.conf`. To add extra mariabackup flags (e.g. `--compress`), edit the arrays directly in the script:
 
 ```bash
 #incremental options
