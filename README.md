@@ -34,42 +34,19 @@ grant reload,process,lock tables,binlog monitor,connection admin,slave monitor o
 
 ```
 
-### Main script settings: ###
+### Configuration ###
 
+All settings live in `backup.conf`, which is sourced by both `mariabackup.bash` and `prepare.bash`. The file is gitignored so pulling updated scripts will not overwrite your production values.
 
-```bash
-# Define the backup directory
-backup_dir=/media/backups/
-
-# Define the mariadb user and password
-user=backup
-password=password
-
-#emaillist, spaces in-between, no commas
-emails="email@emaildomain.com"
-fromemail="mariabackup@emaildomain.com"
-
-#number of days to keep backups
-#0= just today's backup | 1= today and yesterday | 2=today,yesterday,day before etc
-backupdays=0
-
-#full backup cycle in days (a new full backup is taken every N days)
-full_backup_cycle=3
-
-#dump table sturture per for single database restores (full innodb databases only)
-dumpstructure='n'
-```
-
-### Prepare script settings: ###
+To set up on a new server, copy the example file and edit it:
 
 ```bash
-# Local working directory (optional). Set to a fast local path to avoid
-# random I/O over slow NFS during prepare. Leave empty for in-place behavior.
-# NOTE: Needs enough free space for compressed + uncompressed backup
-# (e.g., 157 GB compressed + 500 GB+ uncompressed = ~700 GB+).
-work_dir=""
-# Example: work_dir="/var/tmp/mariabackup-prepare"
+cp backup.conf.example backup.conf
+vi backup.conf
 ```
+
+See `backup.conf.example` for all available settings and their defaults:
+`backup_dir`, `user`, `password`, `emails`, `fromemail`, `backupdays`, `full_backup_cycle`, `dumpstructure`, `databasenames`, and `work_dir`.
 
 ### Add, remove or change variables in the mariabackup options ###
 Do not change, will break script|
