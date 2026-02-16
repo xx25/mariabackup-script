@@ -6,8 +6,16 @@
 #script will then look for fullbackup folder and loop through the incremental backups in order
 #do not run if no incremental backups have been taken, run prepare manually
 
+# Local working directory (optional). Set to a fast local path to avoid
+# random I/O over slow NFS during prepare. Leave empty for in-place behavior.
+# NOTE: Needs enough free space for compressed + uncompressed backup
+# (e.g., 157 GB compressed + 500 GB+ uncompressed = ~700 GB+).
+work_dir=""
+# Example: work_dir="/var/tmp/mariabackup-prepare"
+
 # Set variables for the full backup folder and the incremental backup folder
 
+orig_backupdir="$1"
 backupdir="$1"
 exportoption="$2"
 FULL_BACKUP_DIR=$backupdir/fullbackup/
@@ -15,6 +23,51 @@ restartfulldir=$FULL_BACKUP_DIR/*
 INCREMENTAL_BACKUP_DIR=$backupdir/incr/*
 incrementaldir=$backupdir/incr/
 preparelog=$backupdir/prepare.log
+
+# If work_dir is set, copy compressed backups to fast local storage
+use_local=0
+if [[ -n "$work_dir" ]]; then
+    backup_date=$(basename "$orig_backupdir")
+    local_backupdir="$work_dir/$backup_date"
+
+    if [[ ! -d "$local_backupdir" ]]; then
+        echo "$(date +'%Y-%m-%d %H:%M:%S') Copying compressed backups from NFS to local working directory $local_backupdir"
+        mkdir -p "$local_backupdir/fullbackup"
+        mkdir -p "$local_backupdir/incr"
+
+        # Copy full backup (may be in fullbackup/ or parent dir if previously prepared)
+        if [[ -f "$orig_backupdir/fullbackup/full_backup.gz" ]]; then
+            cp "$orig_backupdir/fullbackup/full_backup.gz" "$local_backupdir/fullbackup/"
+        elif [[ -f "$orig_backupdir/full_backup.gz" ]]; then
+            cp "$orig_backupdir/full_backup.gz" "$local_backupdir/"
+        fi
+
+        # Copy incremental backups
+        for incdir in "$orig_backupdir"/incr/*/; do
+            if [[ -d "$incdir" ]]; then
+                incname=$(basename "$incdir")
+                mkdir -p "$local_backupdir/incr/$incname"
+                cp "$incdir/incremental.backup.gz" "$local_backupdir/incr/$incname/" 2>/dev/null
+            fi
+        done
+
+        # Copy prepare.log if it exists (for re-run detection)
+        [[ -f "$orig_backupdir/prepare.log" ]] && cp "$orig_backupdir/prepare.log" "$local_backupdir/"
+
+        echo "$(date +'%Y-%m-%d %H:%M:%S') Copy complete"
+    else
+        echo "$(date +'%Y-%m-%d %H:%M:%S') Local working directory $local_backupdir already exists, using existing copy"
+    fi
+
+    # Redirect all paths to local working directory
+    backupdir="$local_backupdir"
+    FULL_BACKUP_DIR="$local_backupdir/fullbackup/"
+    restartfulldir="$FULL_BACKUP_DIR*"
+    INCREMENTAL_BACKUP_DIR="$local_backupdir/incr/*"
+    incrementaldir="$local_backupdir/incr/"
+    preparelog="$local_backupdir/prepare.log"
+    use_local=1
+fi
 
 #reset backup directory if prepare script has been ran before
 
@@ -80,11 +133,17 @@ includefull=$(($incbackups + 1))
 #if number of prepared backups = number of backups process was succesfully
 if [[ $lastcheckstatus -eq $includefull ]]; then
     echo "$(date +'%Y-%m-%d %H:%M:%S') Prepare completed successfully and ready to restore from backup directory $FULL_BACKUP_DIR"
+    if [[ $use_local -eq 1 ]]; then
+        echo "Prepared backup is on local disk (source NFS: $orig_backupdir)"
+    fi
     echo "Restore with either command:"
     echo "mariabackup --copy-back --target-dir=$FULL_BACKUP_DIR"
     echo "mariabackup --move-back --target-dir=$FULL_BACKUP_DIR"
 else
     echo "$(date +'%Y-%m-%d %H:%M:%S') Prepare failed, check $preparelog for more details. number of backups did not equal number of prepared backups"
+    if [[ $use_local -eq 1 ]]; then
+        echo "$(date +'%Y-%m-%d %H:%M:%S') Local working directory preserved for inspection: $backupdir"
+    fi
 fi
  
 
