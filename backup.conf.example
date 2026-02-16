@@ -25,10 +25,6 @@ full_backup_cycle=3
 #To be used along with with --export option for the --prepare command to restore single tables (you need to table sturture to restore single tables)
 dumpstructure='n'
 
-#------------variables------------
-
-declare -a databasenames=(fire test nation test1234)
-
 # Local working directory for prepare.bash (optional). Set to a fast local
 # path to avoid random I/O over slow NFS during prepare. Leave empty for
 # in-place behavior.

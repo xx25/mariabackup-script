@@ -46,7 +46,9 @@ vi backup.conf
 ```
 
 See `backup.conf.example` for all available settings and their defaults:
-`backup_dir`, `user`, `password`, `emails`, `fromemail`, `backupdays`, `full_backup_cycle`, `dumpstructure`, `databasenames`, and `work_dir`.
+`backup_dir`, `user`, `password`, `emails`, `fromemail`, `backupdays`, `full_backup_cycle`, `dumpstructure`, and `work_dir`.
+
+When `dumpstructure='y'`, the script automatically discovers all databases (excluding `information_schema`, `performance_schema`, and `sys`) and dumps their schema via `mariadb-dump --no-data`. The dumps are stored under `tablestructure/` in the backup date folder and are needed for single-table restores with `--export`.
 
 ### Add, remove or change variables in the mariabackup options ###
 Do not change, will break script|

@@ -103,10 +103,12 @@ fi
 if [[ $dumpstructure == "y" ]];then
 	mkdir -p $dumpstructurefolder
 
+	mapfile -t databasenames < <(mariadb -u "$user" -p"$password" -BNe "SHOW DATABASES" 2>/dev/null | grep -Ev '^(information_schema|performance_schema|sys)$')
+	debug_log "Databases to dump: ${databasenames[*]}"
+
 	for dbname in "${databasenames[@]}"
 	do
 		mkdir -p $dumpstructurefolder/$dbname/
-		#nodatasqlfile=$dumpstructurefolder/$dbname/
 		mariadb-dump -u $user -p$password -R --no-data $dbname > $dumpstructurefolder/$dbname/$currenttimedatastructure
 	done
 fi
