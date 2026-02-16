@@ -6,16 +6,21 @@ Parts of the scripts are standard to Redhat/yum distros which means you may find
 ### This script has the following features: ###
 
 * Full and incremental backups (compressed with gzip)
-* Retention policy
+* Configurable full backup cycle (e.g. every N days)
+* Retention policy (date-based, safe for NFS)
 * Email on failure (mailx)
 * Auto removal of failed incremental backups
+* Debug mode (`--debug` flag)
 * Prepare script that loops through incremental backups to apply new changes to full backup
+* Optional local working directory for prepare — avoids slow random I/O on NFS mounts
 
 ### How to use ###
 
 ```bash
-
 bash mariabackup.bash
+
+# run with debug output
+bash mariabackup.bash --debug
 
 bash prepare.bash /media/backups/dateofback
 ```
@@ -48,8 +53,22 @@ fromemail="mariabackup@emaildomain.com"
 #0= just today's backup | 1= today and yesterday | 2=today,yesterday,day before etc
 backupdays=0
 
+#full backup cycle in days (a new full backup is taken every N days)
+full_backup_cycle=3
+
 #dump table sturture per for single database restores (full innodb databases only)
 dumpstructure='n'
+```
+
+### Prepare script settings: ###
+
+```bash
+# Local working directory (optional). Set to a fast local path to avoid
+# random I/O over slow NFS during prepare. Leave empty for in-place behavior.
+# NOTE: Needs enough free space for compressed + uncompressed backup
+# (e.g., 157 GB compressed + 500 GB+ uncompressed = ~700 GB+).
+work_dir=""
+# Example: work_dir="/var/tmp/mariabackup-prepare"
 ```
 
 ### Add, remove or change variables in the mariabackup options ###
