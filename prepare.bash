@@ -6,12 +6,9 @@
 #script will then look for fullbackup folder and loop through the incremental backups in order
 #do not run if no incremental backups have been taken, run prepare manually
 
-# Local working directory (optional). Set to a fast local path to avoid
-# random I/O over slow NFS during prepare. Leave empty for in-place behavior.
-# NOTE: Needs enough free space for compressed + uncompressed backup
-# (e.g., 157 GB compressed + 500 GB+ uncompressed = ~700 GB+).
-work_dir=""
-# Example: work_dir="/var/tmp/mariabackup-prepare"
+#------load configuration-------
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/backup.conf"
 
 # Set variables for the full backup folder and the incremental backup folder
 

@@ -16,36 +16,11 @@ debug_log() {
 	fi
 }
 
-#------customize main settings-------
-
-#create user 'backup'@'localhost' identified by 'password';
-#grant select,reload,process,lock tables,binlog monitor,connection admin,slave monitor on *.* to 'backup'@'localhost';
-
-# Define the backup directory
-backup_dir=/mnt/netapp-vol0/ext/MariaDB_Backup
-
-# Define the mariadb user and password
-user=root
-password=pwd1234
-
-#emaillist, spaces in-between, no commas
-emails="email@emaildomain.com"
-fromemail="mariabackupalerts@6emaildomain.com"
-
-#number of days to keep backups
-#0= just today's backup | 1= today and yesterday | 2=today,yesterday,day before etc
-backupdays=7
-
-#full backup cycle in days (a new full backup is taken every N days)
-full_backup_cycle=3
-
-#Dump table sturture per for single database restores (full innodb databases only)
-#To be used along with with --export option for the --prepare command to restore single tables (you need to table sturture to restore single tables)
-dumpstructure='n'
+#------load configuration-------
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/backup.conf"
 
 #------------variables------------
-
-declare -a databasenames=(fire test nation test1234)
 
 # Get the current date
 # Group days into cycles of $full_backup_cycle days so a full backup is only taken
