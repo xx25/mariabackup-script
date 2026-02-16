@@ -50,23 +50,11 @@ See `backup.conf.example` for all available settings and their defaults:
 
 When `dumpstructure='y'`, the script automatically discovers all databases (excluding `information_schema`, `performance_schema`, and `sys`) and dumps their schema via `mariadb-dump --no-data`. The dumps are stored under `tablestructure/` in the backup date folder and are needed for single-table restores with `--export`.
 
-### Add, remove or change variables in the mariabackup options ###
-Do not change, will break script|
-----------------|
-"--backup"|
-"--user=$user"|
-"--password=$password"|
-"--target-dir=$fullbackuplocation"|
-"--extra-lsndir=$extra_lsndir"|
-"--stream=xbstream"|
+### Mariabackup options ###
 
-
-#### options: ####
-
-You have options for full and incremental backups. Having two sets of options allows you to have lots of parallel threads for the full backup early in the morning and a few in working hours to stop the database becoming slow during the day as incremental backups shouldn't take long to complete
+The script defines two option arrays in `mariabackup.bash` — one for full and one for incremental backups. They automatically use `user` and `password` from `backup.conf`. To add extra mariabackup flags (e.g. `--parallel`, `--compress`), edit the arrays directly in the script:
 
 ```bash
-#----------define backup options------------
 #incremental options
 declare -a backup_options_inc=(
 	"--backup"
@@ -76,19 +64,16 @@ declare -a backup_options_inc=(
 	"--incremental-basedir=$extra_lsndir"
 	"--stream=xbstream"
 	"--slave-info"
-	"--parallel=1"
 	)
 
 #full backup options
 declare -a backup_options_full=(
-        "--backup"
-        "--user=$user"
-        "--password=$password"
-        "--target-dir=$fullbackuplocation"
-        "--extra-lsndir=$extra_lsndir"
-        "--stream=xbstream"
+	"--backup"
+	"--user=$user"
+	"--password=$password"
+	"--target-dir=$fullbackuplocation"
+	"--extra-lsndir=$extra_lsndir"
+	"--stream=xbstream"
 	"--slave-info"
-	"--parallel=1"
-        )
-
+	)
 ```
