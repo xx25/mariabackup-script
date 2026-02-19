@@ -21,6 +21,15 @@ debug_log() {
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/backup.conf"
 
+#------lock file: prevent concurrent runs-------
+lock_file="${lock_file:-/tmp/mariabackup.lock}"
+exec 200>"$lock_file"
+if ! flock -n 200; then
+	echo "Another instance is already running (lock: $lock_file). Exiting." >&2
+	exit 1
+fi
+debug_log "Acquired lock: $lock_file"
+
 #------------variables------------
 
 # Get the current date

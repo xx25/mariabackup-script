@@ -1,11 +1,11 @@
 # mariabackup-script
 ## Full and incremental script along with prepare script to uncompress and apply incremental backups to full backup ##
 
-Parts of the scripts are standard to Redhat/yum distros which means you may find that you need to change tools used in the script to better suit your OS. You may need to install pigz, or change it to gzip and gunzip.
+Parts of the scripts are standard to Redhat/yum distros which means you may find that you need to change tools used in the script to better suit your OS. You will need `pigz` and `unpigz` installed (parallel gzip).
 
 ### This script has the following features: ###
 
-* Full and incremental backups (compressed with gzip)
+* Full and incremental backups (compressed with pigz)
 * Configurable full backup cycle (e.g. every N days)
 * Retention policy (date-based, safe for NFS)
 * Email on failure (mailx)
@@ -36,7 +36,7 @@ grant reload,process,lock tables,binlog monitor,connection admin,slave monitor o
 
 ### Configuration ###
 
-All settings live in `backup.conf`, which is sourced by both `mariabackup.bash` and `prepare.bash`. The file is gitignored so pulling updated scripts will not overwrite your production values.
+All settings live in `backup.conf`, which is sourced by `mariabackup.bash`, `prepare.bash`, and `automate_backup_testing.bash`. The file is gitignored so pulling updated scripts will not overwrite your production values.
 
 To set up on a new server, copy the example file and edit it:
 
